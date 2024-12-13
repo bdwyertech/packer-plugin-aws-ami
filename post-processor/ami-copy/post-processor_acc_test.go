@@ -1,4 +1,4 @@
-package main
+package ami_copy
 
 import (
 	"fmt"

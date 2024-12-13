@@ -1,6 +1,6 @@
 //go:generate packer-sdc mapstructure-to-hcl2 -type Config
 
-package main
+package ami_copy
 
 import (
 	"context"

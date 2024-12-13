@@ -4,7 +4,7 @@ packer {
   required_plugins {
     ami-copy = {
       version = ">=v1.7.0"
-      source  = "github.com/martinbaillie/ami-copy"
+      source  = "github.com/bdwyertech/ami-copy"
     }
   }
 }
