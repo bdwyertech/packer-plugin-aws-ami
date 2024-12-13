@@ -1,4 +1,4 @@
-module github.com/martinbaillie/packer-plugin-ami-copy
+module github.com/bdwyertech/packer-plugin-ami-copy
 
 go 1.22.7
 
