@@ -1,4 +1,4 @@
-//go:generate mapstructure-to-hcl2 -type Config
+//go:generate packer-sdc mapstructure-to-hcl2 -type Config
 
 package main
 
@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -301,5 +301,5 @@ func writeManifests(output string, manifests []*amicopy.AmiManifest) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(output, rawManifest, 0644)
+	return os.WriteFile(output, rawManifest, 0644)
 }
