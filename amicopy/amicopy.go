@@ -58,7 +58,7 @@ func (ac *AmiCopyImpl) Copy(ui *packer.Ui) (err error) {
 		ac.output = (&ec2.CopyImageOutput{}).SetImageId(*ac.input.SourceImageId)
 	}
 
-	if err = ac.Tag(); err != nil {
+	if err = ac.Tag(ui); err != nil {
 		return err
 	}
 
@@ -102,10 +102,13 @@ func (ac *AmiCopyImpl) SetTargetAccountID(id string) {
 }
 
 // Tag will copy tags from the source image to the target (if any).
-func (ac *AmiCopyImpl) Tag() (err error) {
+func (ac *AmiCopyImpl) Tag(ui *packer.Ui) (err error) {
 	if len(ac.SourceImage.Tags) == 0 {
+		(*ui).Say("No tags on source image")
 		return nil
 	}
+
+	(*ui).Say(fmt.Sprintf("Copying tags %s", ac.SourceImage.Tags[]))
 
 	// Retry creating tags for about 2.5 minutes
 	ctx := context.TODO()
