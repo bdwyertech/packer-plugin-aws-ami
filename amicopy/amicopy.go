@@ -108,7 +108,7 @@ func (ac *AmiCopyImpl) Tag(ui *packer.Ui) (err error) {
 		return nil
 	}
 
-	(*ui).Say(fmt.Sprintf("Copying tags %s", ac.SourceImage.Tags[]))
+	(*ui).Say(fmt.Sprintf("Copying tags %v", ac.SourceImage.Tags))
 
 	// Retry creating tags for about 2.5 minutes
 	ctx := context.TODO()
