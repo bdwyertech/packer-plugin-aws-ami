@@ -19,7 +19,7 @@ type AmiCopy interface {
 	Copy(ui *packer.Ui) error
 	Input() *ec2.CopyImageInput
 	Output() *ec2.CopyImageOutput
-	Tag() error
+	Tag(ui *packer.Ui) error
 	TargetAccountID() string
 }
 
