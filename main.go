@@ -6,13 +6,15 @@ import (
 
 	"github.com/hashicorp/packer-plugin-sdk/plugin"
 
-	pp "github.com/bdwyertech/packer-plugin-ami-copy/post-processor/ami-copy"
+	amiCopy "github.com/bdwyertech/packer-plugin-ami-copy/post-processor/ami-copy"
+	amiDelete "github.com/bdwyertech/packer-plugin-ami-copy/post-processor/ami-delete"
 	"github.com/bdwyertech/packer-plugin-ami-copy/version"
 )
 
 func main() {
 	pps := plugin.NewSet()
-	pps.RegisterPostProcessor(plugin.DEFAULT_NAME, new(pp.PostProcessor))
+	pps.RegisterPostProcessor(plugin.DEFAULT_NAME, new(amiCopy.PostProcessor))
+	pps.RegisterPostProcessor(plugin.DEFAULT_NAME, new(amiDelete.PostProcessor))
 	pps.SetVersion(version.PluginVersion)
 	err := pps.Run()
 	if err != nil {
