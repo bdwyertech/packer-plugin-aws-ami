@@ -173,6 +173,7 @@ func (p *PostProcessor) PostProcess(
 				SourceImage:     source,
 				EnsureAvailable: p.config.EnsureAvailable,
 				TagsOnly:        p.config.TagsOnly,
+				Tags:            p.config.AMITags,
 			}
 			amiCopy.SetTargetAccountID(user)
 			amiCopy.SetInput(&ec2.CopyImageInput{

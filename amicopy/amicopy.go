@@ -33,6 +33,7 @@ type AmiCopyImpl struct {
 	EnsureAvailable bool
 	KeepArtifact    bool
 	TagsOnly        bool
+	Tags            map[string]string
 }
 
 // AmiManifest holds the data about the resulting copied image
@@ -103,12 +104,19 @@ func (ac *AmiCopyImpl) SetTargetAccountID(id string) {
 
 // Tag will copy tags from the source image to the target (if any).
 func (ac *AmiCopyImpl) Tag(ui *packer.Ui) (err error) {
-	if len(ac.SourceImage.Tags) == 0 {
-		(*ui).Say("No tags on source image")
+	tags := ac.SourceImage.Tags
+	for k, v := range ac.Tags {
+		tags = append(tags, &ec2.Tag{
+			Key:   aws.String(k),
+			Value: aws.String(v),
+		})
+	}
+
+	if len(tags) == 0 {
 		return nil
 	}
 
-	(*ui).Say(fmt.Sprintf("Copying tags %v", ac.SourceImage.Tags))
+	(*ui).Say(fmt.Sprintf("Adding tags %v", tags))
 
 	// Retry creating tags for about 2.5 minutes
 	ctx := context.TODO()
@@ -121,7 +129,7 @@ func (ac *AmiCopyImpl) Tag(ui *packer.Ui) (err error) {
 	}.Run(ctx, func(ctx context.Context) error {
 		_, err := ac.EC2.CreateTags(&ec2.CreateTagsInput{
 			Resources: []*string{ac.output.ImageId},
-			Tags:      ac.SourceImage.Tags,
+			Tags:      tags,
 		})
 
 		if awsErr, ok := err.(awserr.Error); ok {
