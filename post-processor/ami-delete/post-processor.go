@@ -23,7 +23,7 @@ import (
 	"github.com/hashicorp/packer-plugin-sdk/template/config"
 	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
 
-	"github.com/bdwyertech/packer-plugin-ami-copy/amicopy"
+	"github.com/bdwyertech/packer-plugin-aws-ami/amicopy"
 
 	awscommon "github.com/hashicorp/packer-plugin-amazon/builder/common"
 )
