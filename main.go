@@ -13,8 +13,8 @@ import (
 
 func main() {
 	pps := plugin.NewSet()
-	pps.RegisterPostProcessor(plugin.DEFAULT_NAME, new(amiCopy.PostProcessor))
-	pps.RegisterPostProcessor(plugin.DEFAULT_NAME, new(amiDelete.PostProcessor))
+	pps.RegisterPostProcessor("ami-copy", new(amiCopy.PostProcessor))
+	pps.RegisterPostProcessor("ami-delete", new(amiDelete.PostProcessor))
 	pps.SetVersion(version.PluginVersion)
 	err := pps.Run()
 	if err != nil {
