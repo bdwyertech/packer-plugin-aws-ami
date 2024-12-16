@@ -167,7 +167,7 @@ func (p *PostProcessor) PostProcess(
 					description = *source.Description
 				}
 			}
-
+			ui.Sayf(fmt.Sprintf("Source Tags: %v", source.Tags))
 			amiCopy := &amicopy.AmiCopyImpl{
 				EC2:             conn,
 				SourceImage:     source,
