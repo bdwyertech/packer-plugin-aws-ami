@@ -123,7 +123,7 @@ func (p *PostProcessor) PostProcess(
 		}
 	}
 
-	return artifact, false, false, nil
+	return artifact, true, true, nil
 }
 
 // ami encapsulates simplistic details about an AMI.
