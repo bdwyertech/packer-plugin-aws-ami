@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/sts"
 
 	"github.com/hashicorp/packer-plugin-amazon/builder/chroot"
 	"github.com/hashicorp/packer-plugin-amazon/builder/ebs"
@@ -119,6 +120,15 @@ func (p *PostProcessor) PostProcess(
 		return artifact, keepArtifactBool, false,
 			fmt.Errorf("Unexpected artifact type: %s\nCan only export from Amazon builders",
 				artifact.BuilderId())
+	}
+
+	if awsArtifact, ok := artifact.(*awscommon.Artifact); ok {
+		ui.Sayf("Passed Build Artifacts: %v", awsArtifact.Amis)
+		s := awsArtifact.Session
+		resp, err := sts.New(s).GetCallerIdentity(&sts.GetCallerIdentityInput{})
+		if err == nil {
+			ui.Say("Prior Session: " + resp.String())
+		}
 	}
 
 	// Current AWS session
