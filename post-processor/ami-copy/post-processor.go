@@ -55,6 +55,10 @@ type Config struct {
 	ManifestOutput  string `mapstructure:"manifest_output"`
 	TagsOnly        bool   `mapstructure:"tags_only"`
 
+	Targets map[string]struct {
+		awscommon.AccessConfig `mapstructure:",squash"`
+	} `mapstructure:"targets"`
+
 	ctx interpolate.Context
 }
 
@@ -82,8 +86,8 @@ func (p *PostProcessor) Configure(raws ...interface{}) error {
 		return err
 	}
 
-	if len(p.config.AMIUsers) == 0 {
-		return errors.New("ami_users must be set")
+	if len(p.config.AMIUsers) == 0 && len(p.config.Targets) == 0 {
+		return errors.New("ami_users or targets must be set")
 	}
 
 	if len(p.config.KeepArtifact) == 0 {
@@ -132,7 +136,7 @@ func (p *PostProcessor) PostProcess(
 	}
 
 	// Current AWS session
-	currSession, err := p.config.AccessConfig.Session()
+	currSession, err := p.config.Session()
 	if err != nil {
 		return artifact, keepArtifactBool, false, err
 	}
@@ -152,22 +156,33 @@ func (p *PostProcessor) PostProcess(
 			return artifact, keepArtifactBool, false, err
 		}
 
+		var conns []*ec2.EC2
+		for _, tgt := range p.config.Targets {
+			session, err := tgt.Session()
+			if err != nil {
+				ui.Error(err.Error())
+				continue
+			}
+			conns = append(conns, ec2.New(session, &aws.Config{Region: aws.String(ami.region)}))
+		}
+
 		for _, user := range users {
-			var conn *ec2.EC2
 			{
 				if p.config.RoleName != "" {
 					var (
 						role = fmt.Sprintf("arn:aws:iam::%s:role/%s", user, p.config.RoleName)
 						sess = currSession.Copy(&aws.Config{Region: aws.String(ami.region)})
 					)
-					conn = ec2.New(sess, &aws.Config{
+					conns = append(conns, ec2.New(sess, &aws.Config{
 						Credentials: stscreds.NewCredentials(sess, role),
-					})
+					}))
 				} else {
-					conn = ec2.New(currSession.Copy(&aws.Config{Region: aws.String(ami.region)}))
+					conns = append(conns, ec2.New(currSession.Copy(&aws.Config{Region: aws.String(ami.region)})))
 				}
 			}
+		}
 
+		for _, conn := range conns {
 			var name, description string
 			{
 				if source.Name != nil {
@@ -185,7 +200,7 @@ func (p *PostProcessor) PostProcess(
 				TagsOnly:        p.config.TagsOnly,
 				Tags:            p.config.AMITags,
 			}
-			amiCopy.SetTargetAccountID(user)
+			amiCopy.SetTargetAccountID("self")
 			amiCopy.SetInput(&ec2.CopyImageInput{
 				Name:          aws.String(name),
 				Description:   aws.String(description),
