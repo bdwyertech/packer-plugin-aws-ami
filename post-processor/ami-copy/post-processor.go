@@ -1,4 +1,5 @@
-//go:generate packer-sdc mapstructure-to-hcl2 -type Config
+//go:generate packer-sdc struct-markdown
+//go:generate packer-sdc mapstructure-to-hcl2 -type Config,Target
 
 package ami_copy
 
@@ -55,11 +56,14 @@ type Config struct {
 	ManifestOutput  string `mapstructure:"manifest_output"`
 	TagsOnly        bool   `mapstructure:"tags_only"`
 
-	Targets map[string]struct {
-		awscommon.AccessConfig `mapstructure:",squash"`
-	} `mapstructure:"targets"`
+	Targets []Target `mapstructure:"targets"`
 
 	ctx interpolate.Context
+}
+
+type Target struct{
+	awscommon.AccessConfig `mapstructure:",squash"`
+	Name string `mapstructure:"name"`
 }
 
 // PostProcessor implements Packer's PostProcessor interface.
