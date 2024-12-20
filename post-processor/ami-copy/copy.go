@@ -1,4 +1,4 @@
-package amicopy
+package ami_copy
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/bdwyertech/packer-plugin-aws-ami/helpers"
 
 	"github.com/hashicorp/packer-plugin-amazon/builder/common/awserrors"
 	"github.com/hashicorp/packer-plugin-sdk/packer"
@@ -66,7 +67,7 @@ func (ac *AmiCopyImpl) Copy(ui *packer.Ui) (err error) {
 	if ac.EnsureAvailable {
 		(*ui).Say("Going to wait for image to be in available state")
 		for i := 1; i <= 30; i++ {
-			image, err := LocateSingleAMI(*ac.output.ImageId, ac.EC2)
+			image, err := helpers.LocateSingleAMI(*ac.output.ImageId, ac.EC2)
 			if err != nil && image == nil {
 				return err
 			}
@@ -141,23 +142,4 @@ func (ac *AmiCopyImpl) Tag(ui *packer.Ui) (err error) {
 
 		return err
 	})
-}
-
-// LocateSingleAMI tries to locate a single AMI for the given ID.
-func LocateSingleAMI(id string, ec2Conn *ec2.EC2) (*ec2.Image, error) {
-	if output, err := ec2Conn.DescribeImages(&ec2.DescribeImagesInput{
-		Filters: []*ec2.Filter{
-			{
-				Name:   aws.String("image-id"),
-				Values: aws.StringSlice([]string{id}),
-			},
-		},
-	}); err != nil {
-		return nil, err
-	} else if len(output.Images) != 1 {
-		return nil, fmt.Errorf("Single source image not located (found: %d images)",
-			len(output.Images))
-	} else {
-		return output.Images[0], nil
-	}
 }

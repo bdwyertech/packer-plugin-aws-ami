@@ -23,7 +23,7 @@ import (
 	"github.com/hashicorp/packer-plugin-sdk/template/config"
 	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
 
-	"github.com/bdwyertech/packer-plugin-aws-ami/amicopy"
+	"github.com/bdwyertech/packer-plugin-aws-ami/helpers"
 
 	awscommon "github.com/hashicorp/packer-plugin-amazon/builder/common"
 )
@@ -99,7 +99,7 @@ func (p *PostProcessor) PostProcess(
 	for _, ami := range amis {
 		var img *ec2.Image
 		client := ec2.New(currSession, aws.NewConfig().WithRegion(ami.region))
-		if img, err = amicopy.LocateSingleAMI(
+		if img, err = helpers.LocateSingleAMI(
 			ami.id,
 			client,
 		); err != nil || img == nil {

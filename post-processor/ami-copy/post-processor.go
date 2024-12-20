@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/hashicorp/hcl/v2/hcldec"
 
@@ -32,7 +31,7 @@ import (
 	"github.com/hashicorp/packer-plugin-sdk/template/config"
 	"github.com/hashicorp/packer-plugin-sdk/template/interpolate"
 
-	"github.com/bdwyertech/packer-plugin-aws-ami/amicopy"
+	"github.com/bdwyertech/packer-plugin-aws-ami/helpers"
 
 	awscommon "github.com/hashicorp/packer-plugin-amazon/builder/common"
 )
@@ -61,9 +60,9 @@ type Config struct {
 	ctx interpolate.Context
 }
 
-type Target struct{
+type Target struct {
 	awscommon.AccessConfig `mapstructure:",squash"`
-	Name string `mapstructure:"name"`
+	Name                   string `mapstructure:"name"`
 }
 
 // PostProcessor implements Packer's PostProcessor interface.
@@ -149,11 +148,11 @@ func (p *PostProcessor) PostProcess(
 	var (
 		amis   = amisFromArtifactID(artifact.Id())
 		users  = p.config.AMIUsers
-		copies []amicopy.AmiCopy
+		copies []AmiCopy
 	)
 	for _, ami := range amis {
 		var source *ec2.Image
-		if source, err = amicopy.LocateSingleAMI(
+		if source, err = helpers.LocateSingleAMI(
 			ami.id,
 			ec2.New(currSession, aws.NewConfig().WithRegion(ami.region)),
 		); err != nil || source == nil {
@@ -197,7 +196,7 @@ func (p *PostProcessor) PostProcess(
 				}
 			}
 			ui.Sayf(fmt.Sprintf("Source Tags: %v", source.Tags))
-			amiCopy := &amicopy.AmiCopyImpl{
+			amiCopy := &AmiCopyImpl{
 				EC2:             conn,
 				SourceImage:     source,
 				EnsureAvailable: p.config.EnsureAvailable,
@@ -219,79 +218,68 @@ func (p *PostProcessor) PostProcess(
 	}
 
 	copyErrs := copyAMIs(copies, ui, p.config.ManifestOutput, p.config.CopyConcurrency)
-	if copyErrs > 0 {
+	if copyErrCount := len(copyErrs.Errors); copyErrCount > 0 {
 		return artifact, true, false, fmt.Errorf(
-			"%d/%d AMI copies failed, manual reconciliation may be required", copyErrs, len(copies))
+			"%d/%d AMI copies failed, manual reconciliation may be required", copyErrCount, len(copies))
 	}
 
 	return artifact, keepArtifactBool, false, nil
 }
 
-func copyAMIs(copies []amicopy.AmiCopy, ui packer.Ui, manifestOutput string, concurrencyCount int) int32 {
+func copyAMIs(copies []AmiCopy, ui packer.Ui, manifestOutput string, concurrencyCount int) (errs packer.MultiError) {
 	// Copy execution loop
 	var (
 		copyCount    = len(copies)
-		copyTasks    = make(chan amicopy.AmiCopy, copyCount)
-		amiManifests = make(chan *amicopy.AmiManifest, copyCount)
-		copyErrs     int32
+		amiManifests = make(chan *AmiManifest, copyCount)
 		wg           sync.WaitGroup
 	)
-	var workers int
-	{
-		if workers = concurrencyCount; workers == 0 {
-			workers = copyCount
-		}
-	}
-	for i := 0; i < workers; i++ {
+	guard := make(chan struct{}, concurrencyCount)
+	for _, c := range copies {
 		wg.Add(1)
+		guard <- struct{}{}
 		go func() {
-			defer wg.Done()
-			for c := range copyTasks {
-				input := c.Input()
-				ui.Say(
-					fmt.Sprintf(
-						"[%s] Copying %s to account %s (encrypted: %t)",
-						*input.SourceRegion,
-						*input.SourceImageId,
-						c.TargetAccountID(),
-						*input.Encrypted,
-					),
-				)
-				if err := c.Copy(&ui); err != nil {
-					ui.Say(err.Error())
-					atomic.AddInt32(&copyErrs, 1)
-					continue
-				}
-				output := c.Output()
-				manifest := &amicopy.AmiManifest{
-					AccountID: c.TargetAccountID(),
-					Region:    *input.SourceRegion,
-					ImageID:   *output.ImageId,
-				}
-				amiManifests <- manifest
-
-				ui.Say(
-					fmt.Sprintf(
-						"[%s] Finished copying %s to %s (copied id: %s)",
-						*input.SourceRegion,
-						*input.SourceImageId,
-						c.TargetAccountID(),
-						*output.ImageId,
-					),
-				)
+			defer func() {
+				<-guard
+				wg.Done()
+			}()
+			input := c.Input()
+			ui.Say(
+				fmt.Sprintf(
+					"[%s] Copying %s to account %s (encrypted: %t)",
+					*input.SourceRegion,
+					*input.SourceImageId,
+					c.TargetAccountID(),
+					*input.Encrypted,
+				),
+			)
+			if err := c.Copy(&ui); err != nil {
+				ui.Error(err.Error())
+				packer.MultiErrorAppend(&errs, err)
+				return
 			}
+			output := c.Output()
+			manifest := &AmiManifest{
+				AccountID: c.TargetAccountID(),
+				Region:    *input.SourceRegion,
+				ImageID:   *output.ImageId,
+			}
+			amiManifests <- manifest
+
+			ui.Say(
+				fmt.Sprintf(
+					"[%s] Finished copying %s to %s (copied id: %s)",
+					*input.SourceRegion,
+					*input.SourceImageId,
+					c.TargetAccountID(),
+					*output.ImageId,
+				),
+			)
 		}()
 	}
-
-	// Copy task submission
-	for _, copy := range copies {
-		copyTasks <- copy
-	}
-	close(copyTasks)
 	wg.Wait()
 
 	if manifestOutput != "" {
-		manifests := []*amicopy.AmiManifest{}
+		manifests := []*AmiManifest{}
 	LOOP:
 		for {
 			select {
@@ -308,7 +296,7 @@ func copyAMIs(copies []amicopy.AmiCopy, ui packer.Ui, manifestOutput string, con
 	}
 	close(amiManifests)
 
-	return copyErrs
+	return
 }
 
 // ami encapsulates simplistic details about an AMI.
@@ -326,7 +314,7 @@ func amisFromArtifactID(artifactID string) (amis []*ami) {
 	return amis
 }
 
-func writeManifests(output string, manifests []*amicopy.AmiManifest) error {
+func writeManifests(output string, manifests []*AmiManifest) error {
 	rawManifest, err := json.Marshal(manifests)
 	if err != nil {
 		return err
