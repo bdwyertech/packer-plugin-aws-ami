@@ -185,6 +185,7 @@ func (p *PostProcessor) PostProcess(
 			}
 		}
 
+		var sayOnce sync.Once
 		for _, conn := range conns {
 			var name, description string
 			{
@@ -195,7 +196,11 @@ func (p *PostProcessor) PostProcess(
 					description = *source.Description
 				}
 			}
-			ui.Sayf(fmt.Sprintf("Source Tags: %v", source.Tags))
+
+			sayOnce.Do(func() {
+				ui.Sayf(fmt.Sprintf("Source Tags: %v", source.Tags))
+			})
+
 			amiCopy := &AmiCopyImpl{
 				EC2:             conn,
 				SourceImage:     source,
@@ -233,6 +238,9 @@ func copyAMIs(copies []AmiCopy, ui packer.Ui, manifestOutput string, concurrency
 		amiManifests = make(chan *AmiManifest, copyCount)
 		wg           sync.WaitGroup
 	)
+	if concurrencyCount == 0 { // Unlimited
+		concurrencyCount = copyCount
+	}
 	guard := make(chan struct{}, concurrencyCount)
 	for _, c := range copies {
 		wg.Add(1)
