@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/hashicorp/hcl/v2/hcldec"
+	"github.com/sourcegraph/conc/pool"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
@@ -170,31 +171,27 @@ func (p *PostProcessor) PostProcess(
 		}
 
 		for _, user := range users {
-			{
-				if p.config.RoleName != "" {
-					var (
-						role = fmt.Sprintf("arn:aws:iam::%s:role/%s", user, p.config.RoleName)
-						sess = currSession.Copy(&aws.Config{Region: aws.String(ami.region)})
-					)
-					conns = append(conns, ec2.New(sess, &aws.Config{
-						Credentials: stscreds.NewCredentials(sess, role),
-					}))
-				} else {
-					conns = append(conns, ec2.New(currSession.Copy(&aws.Config{Region: aws.String(ami.region)})))
-				}
+			if p.config.RoleName != "" {
+				var (
+					role = fmt.Sprintf("arn:aws:iam::%s:role/%s", user, p.config.RoleName)
+					sess = currSession.Copy(&aws.Config{Region: aws.String(ami.region)})
+				)
+				conns = append(conns, ec2.New(sess, &aws.Config{
+					Credentials: stscreds.NewCredentials(sess, role),
+				}))
+			} else {
+				conns = append(conns, ec2.New(currSession.Copy(&aws.Config{Region: aws.String(ami.region)})))
 			}
 		}
 
 		var sayOnce sync.Once
 		for _, conn := range conns {
 			var name, description string
-			{
-				if source.Name != nil {
-					name = *source.Name
-				}
-				if source.Description != nil {
-					description = *source.Description
-				}
+			if source.Name != nil {
+				name = *source.Name
+			}
+			if source.Description != nil {
+				description = *source.Description
 			}
 
 			sayOnce.Do(func() {
@@ -222,7 +219,7 @@ func (p *PostProcessor) PostProcess(
 		}
 	}
 
-	copyErrs := copyAMIs(copies, ui, p.config.ManifestOutput, p.config.CopyConcurrency)
+	copyErrs := copyAMIs(ctx, copies, ui, p.config.ManifestOutput, p.config.CopyConcurrency)
 	if copyErrCount := len(copyErrs.Errors); copyErrCount > 0 {
 		return artifact, true, false, fmt.Errorf(
 			"%d/%d AMI copies failed, manual reconciliation may be required", copyErrCount, len(copies))
@@ -231,25 +228,18 @@ func (p *PostProcessor) PostProcess(
 	return artifact, keepArtifactBool, false, nil
 }
 
-func copyAMIs(copies []AmiCopy, ui packer.Ui, manifestOutput string, concurrencyCount int) (errs packer.MultiError) {
+func copyAMIs(ctx context.Context, copies []AmiCopy, ui packer.Ui, manifestOutput string, concurrencyCount int) (errs packer.MultiError) {
 	// Copy execution loop
 	var (
 		copyCount    = len(copies)
 		amiManifests = make(chan *AmiManifest, copyCount)
-		wg           sync.WaitGroup
 	)
 	if concurrencyCount == 0 { // Unlimited
 		concurrencyCount = copyCount
 	}
-	guard := make(chan struct{}, concurrencyCount)
+	p := pool.New().WithContext(ctx).WithMaxGoroutines(concurrencyCount)
 	for _, c := range copies {
-		wg.Add(1)
-		guard <- struct{}{}
-		go func() {
-			defer func() {
-				<-guard
-				wg.Done()
-			}()
+		p.Go(func(_ context.Context) error {
 			input := c.Input()
 			ui.Say(
 				fmt.Sprintf(
@@ -263,7 +253,7 @@ func copyAMIs(copies []AmiCopy, ui packer.Ui, manifestOutput string, concurrency
 			if err := c.Copy(&ui); err != nil {
 				ui.Error(err.Error())
 				packer.MultiErrorAppend(&errs, err)
-				return
+				return err
 			}
 			output := c.Output()
 			manifest := &AmiManifest{
@@ -282,9 +272,10 @@ func copyAMIs(copies []AmiCopy, ui packer.Ui, manifestOutput string, concurrency
 					*output.ImageId,
 				),
 			)
-		}()
+			return nil
+		})
 	}
-	wg.Wait()
+	p.Wait()
 
 	if manifestOutput != "" {
 		manifests := []*AmiManifest{}

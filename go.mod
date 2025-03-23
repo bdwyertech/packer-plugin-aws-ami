@@ -7,6 +7,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/hashicorp/packer-plugin-amazon v1.3.4
 	github.com/hashicorp/packer-plugin-sdk v0.5.4
+	github.com/sourcegraph/conc v0.3.0
 	github.com/zclconf/go-cty v1.15.1
 )
 
